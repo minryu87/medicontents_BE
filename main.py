@@ -142,30 +142,67 @@ async def restart_backend():
     try:
         import subprocess
         import os
+        import signal
         
         logger.info("백엔드 재시작 요청 수신")
         
-        # Docker 컨테이너 재시작
-        result = subprocess.run(
-            ["docker", "restart", "medicontents-be"],
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
+        # 현재 프로세스 ID
+        current_pid = os.getpid()
+        logger.info(f"현재 프로세스 ID: {current_pid}")
         
-        if result.returncode == 0:
-            logger.info("백엔드 재시작 성공")
-            return {
-                "status": "success",
-                "message": "백엔드가 성공적으로 재시작되었습니다.",
-                "restart_time": datetime.now().isoformat()
-            }
-        else:
-            logger.error(f"백엔드 재시작 실패: {result.stderr}")
-            return {
-                "status": "error",
-                "message": f"재시작 실패: {result.stderr}"
-            }
+        # Supervisor를 통한 재시작 시도
+        try:
+            result = subprocess.run(
+                ["supervisorctl", "restart", "medicontents-be"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode == 0:
+                logger.info("Supervisor를 통한 재시작 성공")
+                return {
+                    "status": "success",
+                    "message": "백엔드가 성공적으로 재시작되었습니다.",
+                    "restart_time": datetime.now().isoformat(),
+                    "method": "supervisor"
+                }
+        except Exception as supervisor_error:
+            logger.warning(f"Supervisor 재시작 실패: {supervisor_error}")
+        
+        # Docker 컨테이너 재시작 시도 (호스트에서 실행)
+        try:
+            # 호스트의 docker 명령어 실행
+            result = subprocess.run(
+                ["/usr/bin/docker", "restart", "medicontents-be"],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if result.returncode == 0:
+                logger.info("Docker 컨테이너 재시작 성공")
+                return {
+                    "status": "success",
+                    "message": "백엔드가 성공적으로 재시작되었습니다.",
+                    "restart_time": datetime.now().isoformat(),
+                    "method": "docker"
+                }
+            else:
+                logger.error(f"Docker 재시작 실패: {result.stderr}")
+        except Exception as docker_error:
+            logger.warning(f"Docker 재시작 실패: {docker_error}")
+        
+        # 마지막 수단: 프로세스 종료 (Supervisor가 자동으로 재시작)
+        logger.info("프로세스 종료를 통한 재시작 시도")
+        os.kill(current_pid, signal.SIGTERM)
+        
+        return {
+            "status": "success",
+            "message": "재시작 신호를 보냈습니다. 잠시 후 서버가 재시작됩니다.",
+            "restart_time": datetime.now().isoformat(),
+            "method": "process_termination"
+        }
             
     except Exception as e:
         logger.error(f"재시작 중 오류 발생: {str(e)}")

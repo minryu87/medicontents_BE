@@ -25,11 +25,13 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000", 
         "http://127.0.0.1:3000",
-        "https://medicontents-qa-u45006.vm.elestio.app"  # 배포된 프론트엔드 도메인
+        "https://medicontents-qa-u45006.vm.elestio.app",  # 배포된 프론트엔드 도메인
+        "https://medicontents-qa-u45006.vm.elestio.app/"  # 슬래시 포함
     ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
+    expose_headers=["Content-Length", "Content-Range"],
 )
 
 class ProcessRequest(BaseModel):

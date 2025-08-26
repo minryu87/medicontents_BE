@@ -10,7 +10,7 @@ from typing import Dict, Any, Optional
 from pathlib import Path
 
 # agents 폴더를 Python 경로에 추가
-current_dir = Path(__file__).parent.parent.parent
+current_dir = Path(__file__).parent.parent
 agents_path = current_dir / "agents"
 sys.path.append(str(agents_path))
 

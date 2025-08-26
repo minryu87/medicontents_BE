@@ -136,6 +136,44 @@ async def health_check():
     """헬스 체크 엔드포인트"""
     return {"status": "healthy"}
 
+@app.post("/api/restart")
+async def restart_backend():
+    """백엔드 프로세스 재시작"""
+    try:
+        import subprocess
+        import os
+        
+        logger.info("백엔드 재시작 요청 수신")
+        
+        # Docker 컨테이너 재시작
+        result = subprocess.run(
+            ["docker", "restart", "medicontents-be"],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        if result.returncode == 0:
+            logger.info("백엔드 재시작 성공")
+            return {
+                "status": "success",
+                "message": "백엔드가 성공적으로 재시작되었습니다.",
+                "restart_time": datetime.now().isoformat()
+            }
+        else:
+            logger.error(f"백엔드 재시작 실패: {result.stderr}")
+            return {
+                "status": "error",
+                "message": f"재시작 실패: {result.stderr}"
+            }
+            
+    except Exception as e:
+        logger.error(f"재시작 중 오류 발생: {str(e)}")
+        return {
+            "status": "error",
+            "message": f"재시작 중 오류: {str(e)}"
+        }
+
 @app.post("/api/test-webhook")
 async def test_webhook():
     """웹훅 호출 테스트"""

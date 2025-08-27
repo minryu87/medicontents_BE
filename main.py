@@ -71,6 +71,44 @@ async def get_logs(post_id: str):
     """특정 Post ID의 실시간 로그 조회"""
     global realtime_logs
     logs = realtime_logs.get(post_id, [])
+    
+    # 실제 서버 로그에서 INFO:main: 로그 찾기
+    import subprocess
+    import re
+    
+    try:
+        # Docker 컨테이너의 로그에서 해당 Post ID 관련 INFO:main: 로그 찾기
+        result = subprocess.run(
+            ["docker", "logs", "--since", "5m", "medicontents-be"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        
+        if result.returncode == 0:
+            # 로그에서 INFO:main: 로그와 해당 Post ID 관련 로그 찾기
+            log_lines = result.stdout.split('\n')
+            server_logs = []
+            
+            for line in log_lines:
+                # INFO:main: 로그이면서 해당 Post ID를 포함하는 로그 찾기
+                if 'INFO:main:' in line and post_id in line:
+                    # 로그 형식을 프론트엔드에서 기대하는 형태로 변환
+                    server_logs.append({
+                        'timestamp': datetime.now().isoformat(),
+                        'level': 'INFO',
+                        'message': line.strip(),
+                        'logger': 'main'
+                    })
+            
+            # realtime_logs와 server_logs 합치기
+            all_logs = logs + server_logs
+            return {"logs": all_logs}
+        
+    except Exception as e:
+        logger.warning(f"서버 로그 조회 실패: {str(e)}")
+    
+    # 실패 시 기존 realtime_logs만 반환
     return {"logs": logs}
 
 @app.delete("/api/clear-logs/{post_id}")

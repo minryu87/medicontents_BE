@@ -104,8 +104,34 @@ async def process_post(request: ProcessRequest):
     try:
         logger.info(f"Post ID {request.post_id}에 대한 처리 시작")
         
-        # 비동기로 agent 처리 실행
-        result = await process_post_data_request(request.post_id)
+        # INFO:main: 로그를 realtime_logs에 저장
+        if request.post_id not in realtime_logs:
+            realtime_logs[request.post_id] = []
+        
+        realtime_logs[request.post_id].append({
+            'timestamp': datetime.now().isoformat(),
+            'level': 'INFO',
+            'message': f"INFO:main:Post ID {request.post_id}에 대한 처리 시작",
+            'logger': 'main'
+        })
+        
+        # LogCapture를 사용하여 모든 로그를 realtime_logs에 저장
+        from services.medicontent_service import LogCapture
+        
+        log_capture = LogCapture()
+        log_capture.start_capture()
+        
+        try:
+            # 비동기로 agent 처리 실행
+            result = await process_post_data_request(request.post_id)
+            
+            # 캡처된 로그를 realtime_logs에 저장
+            captured_logs = log_capture.get_logs()
+            for log in captured_logs:
+                realtime_logs[request.post_id].append(log)
+            
+        finally:
+            log_capture.stop_capture()
         
         # result가 이미 완전한 응답 형태인지 확인
         if isinstance(result, dict) and "status" in result:

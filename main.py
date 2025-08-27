@@ -71,44 +71,6 @@ async def get_logs(post_id: str):
     """특정 Post ID의 실시간 로그 조회"""
     global realtime_logs
     logs = realtime_logs.get(post_id, [])
-    
-    # 실제 서버 로그에서 INFO:main: 로그 찾기
-    import subprocess
-    import re
-    
-    try:
-        # Docker 컨테이너의 로그에서 해당 Post ID 관련 INFO:main: 로그 찾기
-        result = subprocess.run(
-            ["docker", "logs", "--since", "5m", "medicontents-be"],
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-        
-        if result.returncode == 0:
-            # 로그에서 INFO:main: 로그와 해당 Post ID 관련 로그 찾기
-            log_lines = result.stdout.split('\n')
-            server_logs = []
-            
-            for line in log_lines:
-                # INFO:main: 로그이면서 해당 Post ID를 포함하는 로그 찾기
-                if 'INFO:main:' in line and post_id in line:
-                    # 로그 형식을 프론트엔드에서 기대하는 형태로 변환
-                    server_logs.append({
-                        'timestamp': datetime.now().isoformat(),
-                        'level': 'INFO',
-                        'message': line.strip(),
-                        'logger': 'main'
-                    })
-            
-            # realtime_logs와 server_logs 합치기
-            all_logs = logs + server_logs
-            return {"logs": all_logs}
-        
-    except Exception as e:
-        logger.warning(f"서버 로그 조회 실패: {str(e)}")
-    
-    # 실패 시 기존 realtime_logs만 반환
     return {"logs": logs}
 
 @app.delete("/api/clear-logs/{post_id}")
@@ -282,6 +244,24 @@ async def n8n_completion(request: N8nCompletionRequest):
         logger.info(f"n8n 완료 요청 수신: {request.post_id}, 워크플로우: {request.workflow_id}")
         logger.info(f"요청 데이터: {request.model_dump()}")
         
+        # INFO:main: 로그를 realtime_logs에 저장
+        if request.post_id not in realtime_logs:
+            realtime_logs[request.post_id] = []
+        
+        realtime_logs[request.post_id].append({
+            'timestamp': datetime.now().isoformat(),
+            'level': 'INFO',
+            'message': f"INFO:main:n8n 완료 요청 수신: {request.post_id}, 워크플로우: {request.workflow_id}",
+            'logger': 'main'
+        })
+        
+        realtime_logs[request.post_id].append({
+            'timestamp': datetime.now().isoformat(),
+            'level': 'INFO',
+            'message': f"INFO:main:요청 데이터: {request.model_dump()}",
+            'logger': 'main'
+        })
+        
         # 1단계: Airtable 상태 확인
         from services.medicontent_service import get_post_data_request, table_medicontent_posts
         
@@ -317,6 +297,14 @@ async def n8n_completion(request: N8nCompletionRequest):
         if is_fully_completed:
             logger.info(f"전체 워크플로우 완료 확인: {request.post_id}")
             
+            # INFO:main: 로그를 realtime_logs에 저장
+            realtime_logs[request.post_id].append({
+                'timestamp': datetime.now().isoformat(),
+                'level': 'INFO',
+                'message': f"INFO:main:전체 워크플로우 완료 확인: {request.post_id}",
+                'logger': 'main'
+            })
+            
             # 3단계: 후속 작업 실행
             await handle_post_completion(request.post_id, request)
             
@@ -348,6 +336,14 @@ async def handle_post_completion(post_id: str, request: N8nCompletionRequest):
     try:
         logger.info(f"후속 작업 시작: {post_id}")
         
+        # INFO:main: 로그를 realtime_logs에 저장
+        realtime_logs[post_id].append({
+            'timestamp': datetime.now().isoformat(),
+            'level': 'INFO',
+            'message': f"INFO:main:후속 작업 시작: {post_id}",
+            'logger': 'main'
+        })
+        
         # 완료 로그 저장
         completion_log = {
             "post_id": post_id,
@@ -358,6 +354,14 @@ async def handle_post_completion(post_id: str, request: N8nCompletionRequest):
         }
         
         logger.info(f"완료 로그: {completion_log}")
+        
+        # INFO:main: 로그를 realtime_logs에 저장
+        realtime_logs[post_id].append({
+            'timestamp': datetime.now().isoformat(),
+            'level': 'INFO',
+            'message': f"INFO:main:완료 로그: {completion_log}",
+            'logger': 'main'
+        })
         
         # 여기에 후속 작업들을 추가할 수 있습니다:
         
@@ -377,6 +381,14 @@ async def handle_post_completion(post_id: str, request: N8nCompletionRequest):
         # await update_completion_stats(post_id)
         
         logger.info(f"후속 작업 완료: {post_id}")
+        
+        # INFO:main: 로그를 realtime_logs에 저장
+        realtime_logs[post_id].append({
+            'timestamp': datetime.now().isoformat(),
+            'level': 'INFO',
+            'message': f"INFO:main:후속 작업 완료: {post_id}",
+            'logger': 'main'
+        })
         
     except Exception as e:
         logger.error(f"후속 작업 처리 중 오류: {str(e)}")

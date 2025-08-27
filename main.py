@@ -122,34 +122,38 @@ async def process_post(request: ProcessRequest):
         log_capture.start_capture()
         
         try:
-            # 타임아웃을 포함한 비동기 실행
-            result = await asyncio.wait_for(
-                process_post_data_request(request.post_id),
-                timeout=60.0  # 60초 타임아웃 (더 길게 설정)
-            )
+            # Agent 실행을 백그라운드에서 시작
+            task = asyncio.create_task(process_post_data_request(request.post_id))
             
             # 캡처된 로그를 realtime_logs에 저장
             captured_logs = log_capture.get_logs()
             for log in captured_logs:
                 realtime_logs[request.post_id].append(log)
             
-        except asyncio.TimeoutError:
-            logger.error(f"Post 처리 타임아웃: {request.post_id}")
+            # 즉시 응답 반환 (백그라운드에서 계속 실행)
+            return {
+                "status": "processing",
+                "post_id": request.post_id,
+                "message": "Agent 실행이 시작되었습니다. 로그를 확인하세요."
+            }
             
-            # 타임아웃 발생 시에도 캡처된 로그를 저장
+        except Exception as e:
+            logger.error(f"Post 처리 중 오류 발생: {str(e)}")
+            
+            # 오류 발생 시에도 캡처된 로그를 저장
             captured_logs = log_capture.get_logs()
             for log in captured_logs:
                 realtime_logs[request.post_id].append(log)
             
-            # 타임아웃 로그 추가
+            # 오류 로그 추가
             realtime_logs[request.post_id].append({
                 'timestamp': datetime.now().isoformat(),
                 'level': 'ERROR',
-                'message': f"INFO:main:Post 처리 타임아웃: {request.post_id}",
+                'message': f"INFO:main:Post 처리 중 오류 발생: {str(e)}",
                 'logger': 'main'
             })
             
-            raise HTTPException(status_code=408, detail="Request timeout")
+            raise HTTPException(status_code=500, detail=str(e))
         finally:
             log_capture.stop_capture()
         

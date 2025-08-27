@@ -122,14 +122,34 @@ async def process_post(request: ProcessRequest):
         log_capture.start_capture()
         
         try:
-            # 비동기로 agent 처리 실행
-            result = await process_post_data_request(request.post_id)
+            # 타임아웃을 포함한 비동기 실행
+            result = await asyncio.wait_for(
+                process_post_data_request(request.post_id),
+                timeout=60.0  # 60초 타임아웃 (더 길게 설정)
+            )
             
             # 캡처된 로그를 realtime_logs에 저장
             captured_logs = log_capture.get_logs()
             for log in captured_logs:
                 realtime_logs[request.post_id].append(log)
             
+        except asyncio.TimeoutError:
+            logger.error(f"Post 처리 타임아웃: {request.post_id}")
+            
+            # 타임아웃 발생 시에도 캡처된 로그를 저장
+            captured_logs = log_capture.get_logs()
+            for log in captured_logs:
+                realtime_logs[request.post_id].append(log)
+            
+            # 타임아웃 로그 추가
+            realtime_logs[request.post_id].append({
+                'timestamp': datetime.now().isoformat(),
+                'level': 'ERROR',
+                'message': f"INFO:main:Post 처리 타임아웃: {request.post_id}",
+                'logger': 'main'
+            })
+            
+            raise HTTPException(status_code=408, detail="Request timeout")
         finally:
             log_capture.stop_capture()
         

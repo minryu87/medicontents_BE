@@ -125,10 +125,14 @@ async def process_post(request: ProcessRequest):
             # Agent 실행을 백그라운드에서 시작
             task = asyncio.create_task(process_post_data_request(request.post_id))
             
-            # 캡처된 로그를 realtime_logs에 저장
+            # 캡처된 로그를 realtime_logs에 저장 (중복 방지)
             captured_logs = log_capture.get_logs()
+            existing_messages = {log['message'] for log in realtime_logs[request.post_id]}
+            
             for log in captured_logs:
-                realtime_logs[request.post_id].append(log)
+                if log['message'] not in existing_messages:
+                    realtime_logs[request.post_id].append(log)
+                    existing_messages.add(log['message'])
             
             # 즉시 응답 반환 (백그라운드에서 계속 실행)
             return {

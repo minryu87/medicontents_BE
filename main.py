@@ -125,14 +125,24 @@ async def process_post(request: ProcessRequest):
             # Agent 실행을 백그라운드에서 시작
             task = asyncio.create_task(process_post_data_request(request.post_id))
             
-            # 캡처된 로그를 realtime_logs에 저장 (중복 방지)
-            captured_logs = log_capture.get_logs()
-            existing_messages = {log['message'] for log in realtime_logs[request.post_id]}
+            # 백그라운드 태스크 완료를 기다리면서 로그를 실시간으로 저장
+            async def monitor_task():
+                try:
+                    await task
+                except Exception as e:
+                    logger.error(f"백그라운드 태스크 오류: {str(e)}")
+                finally:
+                    # 최종 로그 저장
+                    captured_logs = log_capture.get_logs()
+                    existing_messages = {log['message'] for log in realtime_logs[request.post_id]}
+                    
+                    for log in captured_logs:
+                        if log['message'] not in existing_messages:
+                            realtime_logs[request.post_id].append(log)
+                            existing_messages.add(log['message'])
             
-            for log in captured_logs:
-                if log['message'] not in existing_messages:
-                    realtime_logs[request.post_id].append(log)
-                    existing_messages.add(log['message'])
+            # 백그라운드에서 모니터링 시작
+            asyncio.create_task(monitor_task())
             
             # 즉시 응답 반환 (백그라운드에서 계속 실행)
             return {
